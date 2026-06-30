@@ -25,7 +25,7 @@ def yes24_crawl(max_page):
     date_list = []
     image_list = []
 
-    folder_path = r"imgaes\yes24"
+    folder_path = r"images\yes24"
 
     url = "https://www.yes24.com/Main/default.aspx"
 
@@ -147,8 +147,6 @@ def yes24_crawl(max_page):
     driver.close()
     return df
 
-
-
 def kyobo_crawl(max_page):
     search_list = []
     title_list = []
@@ -158,7 +156,7 @@ def kyobo_crawl(max_page):
     date_list = []
     image_list = []
 
-    folder_path = r"imes\kyobo"
+    folder_path = r"images\kyobo"
 
     url = "https://product.kyobobook.co.kr"
 
@@ -284,11 +282,149 @@ def kyobo_crawl(max_page):
 
 
 
+def aladin_crawl(max_page):
+    search_list = []
+    title_list = []
+    name_list = []
+    price_list = []
+    com_list = []
+    date_list = []
+    image_list = []
 
+    folder_path = r"images\aladin"
 
+    url = "https://www.aladin.co.kr/home/welcome.aspx?NaPm=ct%3dmr0aiy2v%7cci%3dcheckout%7ctr%3dds%7ctrx%3dnull%7chk%3df3c4b01d00657ef931dca9c3e7b5dbee5eb6fdb3"
 
+    driver = webdriver.Chrome()
+    driver.maximize_window()
 
+    wait = WebDriverWait(driver, 10)
 
+    driver.get(url)
+    ban = True
+    need_input = True
+
+    while ban:
+        if need_input:
+            keyword = input("검색어 입력: ")
+            need_input = False
+
+        try:
+            search_box = wait.until(
+                EC.presence_of_element_located((By.ID, "SearchWord"))
+            )
+
+            search_box.clear()
+            search_box.send_keys(keyword)
+            search_box.send_keys(Keys.ENTER)
+
+            try:
+                WebDriverWait(driver, 3).until(EC.alert_is_present())
+                alert = driver.switch_to.alert
+                alert.accept()
+                    
+                time.sleep(2)
+                need_input = True
+                continue 
+                    
+            except TimeoutException:
+                pass
+            ban = False
+        
+        except Exception as e:
+            continue
+    # ----------------------------------------------------- 검색
+
+    for page in range(1, max_page + 1): 
+            
+        print(f"{page}번 페이지 크롤링 시작")
+
+        req = driver.page_source
+        soup = BeautifulSoup(req, "html.parser")
+        
+        ALL_books = soup.select(".ss_book_box")
+
+        for row in ALL_books:
+            if not row.select_one(".bo3"): 
+                continue
+            
+            title = row.select_one(".bo3").text 
+            price = row.select_one(".ss_p2").text if row.select_one(".ss_p2") else "" 
+            
+            name = ""
+            com = ""
+            ddatee = ""
+            
+            ncd = None 
+            for li in row.select("ul > li"):
+                if "|" in li.text:
+                    ncd = li
+                    break
+
+            if ncd:
+                ncd = ncd.text.split('|')
+                
+                if len(ncd) >= 3:
+                    name = ncd[0].replace(',', '').strip() 
+                    com = ncd[1].strip()                  
+                    ddatee = ncd[2].strip()
+
+            img_tag = row.select_one(".front_cover img") 
+            
+            img_save = "" 
+
+            if img_tag:
+                img_url = img_tag.get("data-original") or img_tag.get("src")
+                
+                if img_url:
+                    try: 
+                        img_safe_title = re.sub(r'[\/:*?"<>|]', '', title) 
+                        img_save = os.path.join(folder_path, f"{img_safe_title}.jpg")
+                        urllib.request.urlretrieve(img_url, img_save)
+                    except Exception as e:
+                        print(f"이미지 다운로드 실패 ({title}): {e}")
+                        img_save = "다운로드 실패"
+
+            search_list.append(keyword)
+            title_list.append(title)
+            name_list.append(name)
+            price_list.append(price)
+            com_list.append(com)
+            date_list.append(ddatee)
+            image_list.append(img_save)
+        
+        if page == max_page:
+            break
+
+        next_start_index = page + 1
+
+        try:
+            xpath_str = f"//div[@class='numbox']//a[text()='{next_start_index}']"
+            next_btn = wait.until(
+                EC.element_to_be_clickable((By.XPATH, xpath_str))
+            )
+            next_btn.click()
+            time.sleep(2)
+
+        except Exception as e:
+            print(f"이동할 {next_start_index}페이지가 없거나 에러 발생으로 종료:", e)
+            break
+            
+    df = pd.DataFrame({
+        "검색어": search_list,
+        "도서명": title_list,
+        "저자": name_list,
+        "가격": price_list,
+        "출판사": com_list,
+        "출판일": date_list,
+        "이미지 저장 경로": image_list
+    })
+
+    df.to_excel("알라딘.xlsx", index = False)
+    
+
+    driver.close()
+    return df
 
 
 def crawl_start(yes24, kyobo, aladin):
